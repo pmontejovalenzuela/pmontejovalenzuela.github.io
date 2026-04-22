@@ -1,0 +1,306 @@
+---
+title: "A/B Testing a Call to Action"
+subtitle: "Simulating Key Ideas from Classical Frequentist Statistics"
+author: "Paola Montejo"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: false
+    code-summary: "Show the code"
+jupyter: python3
+---
+
+```{python}
+#| label: setup
+#| include: false
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+import statsmodels.api as sm
+from IPython.display import display
+
+np.random.seed(455)
+
+# True signup probabilities
+pi_A = 0.22
+pi_B = 0.18
+theta_true = pi_A - pi_B
+
+# Simulated observed experiment
+n = 1000
+A = np.random.binomial(1, pi_A, n)
+B = np.random.binomial(1, pi_B, n)
+
+theta_hat = A.mean() - B.mean()
+pi_A_hat = A.mean()
+pi_B_hat = B.mean()
+
+def pct(x):
+    return f"{100*x:.1f}%"
+```
+
+## Introduction
+
+Imagine you run a website with a newsletter signup box on the landing page. You are considering two versions of the call to action, or CTA. CTA A says **“Sign up for our newsletter here!”** and CTA B says **“Stay up to date by signing up!”** The goal is to figure out which message leads to more newsletter sign-ups.
+
+A natural way to answer that question is with an **A/B test**. Visitors are randomly assigned to see one of the two CTAs, and then we compare the sign-up rates across the two groups. Random assignment matters because it helps make the two groups comparable. If one CTA gets a higher sign-up rate, we have a stronger case that the wording itself caused the difference.
+
+In this post, I use a simulated A/B test to walk through several core ideas from classical frequentist statistics: estimation, the Law of Large Numbers, bootstrap standard errors, the Central Limit Theorem, hypothesis testing, the regression interpretation of a two-sample test, and why “peeking” at results can get you into trouble.
+
+## The A/B Test as a Statistical Problem
+
+For each visitor, the outcome is binary: either they sign up for the newsletter or they do not. That means each observation can be modeled as a draw from a Bernoulli distribution, where the parameter \\(\pi\\) is the probability of signing up.
+
+Because the CTA wording may affect behavior, I allow the sign-up probability to differ across groups. Visitors who see CTA A have sign-up probability \\(\pi_A\\), and visitors who see CTA B have sign-up probability \\(\pi_B\\).
+
+The quantity I care about is the difference in sign-up rates:
+
+\\[
+\theta = \pi_A - \pi_B
+\\]
+
+A natural estimator is the difference in sample means:
+
+\\[
+\hat\theta = \bar{X}_A - \bar{X}_B
+\\]
+
+Because the outcomes are 0 or 1, each sample mean is also a sample proportion.
+
+## Simulating Data
+
+In a real A/B test, we would not know the true values of \\(\pi_A\\) and \\(\pi_B\\). For this exercise, I set them myself so I can study how the estimator behaves when the truth is known.
+
+Suppose the true sign-up rates are \\(\pi_A = 0.22\\) and \\(\pi_B = 0.18\\). Then the true difference is:
+
+\\[
+\theta = 0.22 - 0.18 = 0.04
+\\]
+
+```{python}
+sim_summary = pd.DataFrame({
+    "Group": ["CTA A", "CTA B"],
+    "True rate": [pct(pi_A), pct(pi_B)],
+    "Observed rate": [pct(pi_A_hat), pct(pi_B_hat)],
+    "Signups": [A.sum(), B.sum()],
+    "Visitors": [len(A), len(B)]
+})
+
+display(sim_summary)
+print(f"True difference: {pct(theta_true)}")
+print(f"Observed difference: {pct(theta_hat)}")
+```
+
+## The Law of Large Numbers
+
+The Law of Large Numbers says that as the sample size grows, the sample mean converges to the population mean. In this setting, that gives us confidence that \\(\hat\theta\\) will get closer to the true \\(\theta\\) as more observations arrive.
+
+```{python}
+diffs = A - B
+running_mean = np.cumsum(diffs) / np.arange(1, n + 1)
+
+plt.figure(figsize=(8, 5))
+plt.plot(np.arange(1, n + 1), running_mean)
+plt.axhline(theta_true, linestyle="--")
+plt.title("The Law of Large Numbers in an A/B Test")
+plt.xlabel("Number of paired observations")
+plt.ylabel(r"Running estimate of $\hat{\theta}$")
+plt.show()
+```
+
+At the beginning, the estimate is noisy. As the sample size grows, the running average settles down and moves closer to the true difference of 0.04.
+
+## Bootstrap Standard Errors
+
+A point estimate is useful, but it does not tell us how uncertain we are. The bootstrap is a resampling method that estimates variability by repeatedly resampling from the observed data with replacement.
+
+```{python}
+B_boot = 1000
+boot_thetas = np.empty(B_boot)
+
+for i in range(B_boot):
+    A_star = np.random.choice(A, size=n, replace=True)
+    B_star = np.random.choice(B, size=n, replace=True)
+    boot_thetas[i] = A_star.mean() - B_star.mean()
+
+boot_se = boot_thetas.std(ddof=1)
+
+analytic_se = np.sqrt(
+    (pi_A_hat * (1 - pi_A_hat)) / n +
+    (pi_B_hat * (1 - pi_B_hat)) / n
+)
+
+ci_lower = theta_hat - 1.96 * boot_se
+ci_upper = theta_hat + 1.96 * boot_se
+
+boot_summary = pd.DataFrame({
+    "Quantity": ["Bootstrapped SE", "Analytical SE", "95% CI lower", "95% CI upper"],
+    "Value": [boot_se, analytic_se, ci_lower, ci_upper]
+})
+
+display(boot_summary)
+```
+
+The bootstrap and analytical standard errors should be close. That tells us the resampling approach is producing a sensible estimate of uncertainty.
+
+```{python}
+plt.figure(figsize=(8, 5))
+plt.hist(boot_thetas, bins=35)
+plt.axvline(theta_hat, linestyle="--")
+plt.title("Bootstrap Distribution of the Estimated Effect")
+plt.xlabel(r"Bootstrapped $\hat{\theta}$")
+plt.ylabel("Count")
+plt.show()
+```
+
+A 95% confidence interval based on the bootstrap standard error runs from about `ci_lower` to `ci_upper`. If that interval stays above zero, it suggests CTA A likely performs better than CTA B.
+
+## The Central Limit Theorem
+
+The Central Limit Theorem says that as the sample size grows, the sampling distribution of the sample mean becomes approximately Normal. The same idea applies to the difference in sample means.
+
+```{python}
+def simulate_theta(sample_n, reps=1000, pA=pi_A, pB=pi_B):
+    out = np.empty(reps)
+    for i in range(reps):
+        out[i] = (
+            np.random.binomial(1, pA, sample_n).mean()
+            - np.random.binomial(1, pB, sample_n).mean()
+        )
+    return out
+
+sample_sizes = [25, 50, 100, 500]
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True, sharey=True)
+
+for ax, sample_n in zip(axes.flatten(), sample_sizes):
+    vals = simulate_theta(sample_n)
+    ax.hist(vals, bins=30)
+    ax.axvline(theta_true, linestyle="--")
+    ax.set_title(f"n = {sample_n}")
+    ax.set_xlabel(r"$\hat{\theta}$")
+    ax.set_ylabel("Count")
+
+plt.tight_layout()
+plt.show()
+```
+
+At small sample sizes, the histograms are rougher. As the sample size increases, they become smoother and more bell-shaped, illustrating the Central Limit Theorem.
+
+## Hypothesis Testing
+
+To formally test whether the two CTAs perform differently, I test:
+
+\\[
+H_0: \theta = 0
+\\]
+
+against
+
+\\[
+H_1: \theta \neq 0
+\\]
+
+The test statistic is:
+
+\\[
+z = \frac{\hat\theta - 0}{SE(\hat\theta)}
+\\]
+
+```{python}
+z_stat = theta_hat / analytic_se
+p_value = 2 * (1 - norm.cdf(abs(z_stat)))
+
+test_summary = pd.DataFrame({
+    "Estimated effect": [pct(theta_hat)],
+    "Standard error": [round(analytic_se, 4)],
+    "z statistic": [round(z_stat, 3)],
+    "p-value": [round(p_value, 4)]
+})
+
+display(test_summary)
+```
+
+A small p-value means the observed difference would be unlikely if the true difference were really zero.
+
+## The T-Test as a Regression
+
+The two-sample test can also be written as a regression. Stack both groups into one dataset and estimate:
+
+\\[
+Y_i = \beta_0 + \beta_1 D_i + \varepsilon_i
+\\]
+
+where \\(D_i = 1\\) for CTA A and \\(D_i = 0\\) for CTA B.
+
+```{python}
+reg_df = pd.DataFrame({
+    "y": np.concatenate([A, B]),
+    "D": np.concatenate([np.ones(n), np.zeros(n)])
+})
+
+X = sm.add_constant(reg_df["D"])
+model = sm.OLS(reg_df["y"], X).fit()
+
+reg_summary = pd.DataFrame({
+    "term": model.params.index,
+    "estimate": np.round(model.params.values, 4),
+    "std_error": np.round(model.bse.values, 4),
+    "t_stat": np.round(model.tvalues.values, 3),
+    "p_value": np.round(model.pvalues.values, 4)
+})
+
+display(reg_summary)
+```
+
+The coefficient on the treatment indicator is the same treatment effect estimated earlier using the difference in means.
+
+## The Problem with Peeking
+
+Peeking means checking for significance repeatedly before the planned sample is complete. That inflates the false positive rate because each peek is another chance to get a statistically significant result by luck.
+
+```{python}
+np.random.seed(999)
+
+def peek_once(n_total=1000, p=0.20, alpha=0.05, step=100):
+    A0 = np.random.binomial(1, p, n_total)
+    B0 = np.random.binomial(1, p, n_total)
+
+    for current_n in range(step, n_total + 1, step):
+        A_sub = A0[:current_n]
+        B_sub = B0[:current_n]
+
+        theta_sub = A_sub.mean() - B_sub.mean()
+        se_sub = np.sqrt(
+            (A_sub.mean() * (1 - A_sub.mean())) / current_n +
+            (B_sub.mean() * (1 - B_sub.mean())) / current_n
+        )
+
+        if se_sub == 0:
+            continue
+
+        z_sub = theta_sub / se_sub
+        p_sub = 2 * (1 - norm.cdf(abs(z_sub)))
+
+        if p_sub < alpha:
+            return True
+    return False
+
+peek_results = np.array([peek_once() for _ in range(10000)])
+false_positive_rate = peek_results.mean()
+
+peek_summary = pd.DataFrame({
+    "Nominal false positive rate": ["5.0%"],
+    "Empirical false positive rate with peeking": [pct(false_positive_rate)]
+})
+
+display(peek_summary)
+```
+
+When repeated testing raises the false positive rate above 5%, it means you are more likely to declare a winner even when no real difference exists.
+
+## Conclusion
+
+This A/B testing example shows how frequentist tools help translate webpage experiments into statistical decisions. The difference in means estimates the treatment effect, large-sample theory explains why that estimate becomes reliable, and standard errors and hypothesis tests quantify uncertainty. Just as importantly, the peeking example shows that statistical validity depends not only on the formulas we use, but also on following the experimental design we planned in advance.

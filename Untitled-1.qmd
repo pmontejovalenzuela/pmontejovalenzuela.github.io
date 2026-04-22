@@ -1,0 +1,45 @@
+---
+title: "The 2026 World Cup Outlook"
+format: html
+---
+
+---
+title: "The 2026 World Cup Outlook"
+subtitle: "Predicting the Champions in North America"
+author: "Paola Montejo"
+date: 2026-04-09
+format:
+  revealjs:
+    theme: sky
+    transition: slide
+    embed-resources: true
+---
+
+## The Top Contenders
+As of April 2026, the field of 48 teams is set. Based on current FIFA rankings and betting markets, three nations stand above the rest:
+
+* **Spain (The Favorites):** Currently leading prediction markets with a **16-18%** win probability. Their technical consistency remains unmatched.
+* **France:** The world #1 ranked team. With a peak-age Kylian Mbappé, they are the most formidable squad on paper.
+* **England:** Boasting a deep roster of elite talent, they are widely tipped to finally break their "near-miss" streak.
+
+---
+
+## Why Spain Will Win
+Spain is my pick to lift the trophy on July 19, 2026. Here is why they have the edge:
+
+1.  **Reigning European Form:** Their success in recent UEFA competitions has built a winning culture.
+2.  **Tactical Identity:** Their possession-based system is perfect for navigating a grueling 104-match tournament.
+3.  **Squad Depth:** Unlike teams reliant on a single superstar, Spain’s strength is in a system that remains effective regardless of personnel changes.
+
+---
+
+## The "Home" Advantage?
+With the tournament spread across the USA, Mexico, and Canada, North American teams face unique pressure:
+
+| Team | Current Outlook | Key Player |
+|------|-----------------|------------|
+| **USA** | Underdog / Round of 16 | Christian Pulisic |
+| **Mexico** | High Expectations at Home | Santiago Giménez |
+| **Canada** | Growing Momentum | Alphonso Davies |
+
+> **Bottom Line:** While the co-hosts will provide the atmosphere, the trophy is likely headed back to Europe or South America.
