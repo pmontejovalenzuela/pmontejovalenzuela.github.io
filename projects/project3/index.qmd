@@ -1,0 +1,278 @@
+---
+title: "Replication of Card and Krueger (1994)"
+subtitle: "Minimum Wages and Employment: A Case Study of the Fast-Food Industry in New Jersey and Pennsylvania"
+author: "Paola Montejo Valenzuela"
+date: April 23th, 2026
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Introduction
+
+Card and Krueger (1994) study what happened when New Jersey raised its minimum wage from $4.25 to $5.05 on April 1, 1992, while neighboring Pennsylvania kept the federal minimum wage at $4.25. The paper uses survey data from 410 fast-food restaurants in New Jersey and eastern Pennsylvania, collected just before and several months after the policy change.
+
+The main question is whether the minimum wage increase reduced employment. In the standard competitive model, a binding wage floor should reduce demand for low-wage labor. Card and Krueger test that prediction with a **difference-in-differences** design: compare the before-after change in employment in New Jersey to the before-after change in employment in Pennsylvania.
+
+This replication does three things:
+
+1. It reproduces part of **Table 2**.
+2. It reproduces the 9 numbers in **Table 3, columns (i)-(iii), rows 1-3**.
+3. It reproduces **Table 4, column (i)** and adds one extra result: **Table 3, row 4** plus a graph of the main difference-in-differences pattern.
+
+## Load and clean the data
+
+The original `public.dat` file is a **fixed-width** data file, so it has to be read using the column locations in the codebook. That detail matters for matching the published results closely.
+
+```{python}
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+
+colspecs = [
+    (0,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,15),(16,17),(18,19),(20,21),
+    (22,24),(25,30),(31,36),(37,42),(43,48),(49,54),(55,60),(61,62),(63,68),(69,70),
+    (71,76),(77,82),(83,88),(89,94),(95,100),(101,103),(104,106),(107,108),(109,110),(111,117),
+    (118,120),(121,126),(127,132),(133,138),(139,144),(145,150),(151,156),(157,158),(159,160),(161,166),
+    (167,172),(173,178),(179,184),(185,190),(191,193),(194,196)
+]
+
+cols = [
+    "sheet","chain","co_owned","state","southj","centralj","northj",
+    "pa1","pa2","shore","ncalls","empft","emppt","nmgrs","wage_st",
+    "inctime","firstinc","bonus","pctaff","meals","open","hrsopen",
+    "psoda","pfry","pentree","nregs","nregs11","type2","status2",
+    "date2","ncalls2","empft2","emppt2","nmgrs2","wage_st2","inctime2",
+    "firstin2","special2","meals2","open2r","hrsopen2","psoda2","pfry2",
+    "pentree2","nregs2","nregs112"
+]
+
+njmin = pd.read_fwf("public.dat", colspecs=colspecs, names=cols, na_values=".")
+
+njmin["emptot"] = njmin["empft"] + 0.5 * njmin["emppt"] + njmin["nmgrs"]
+njmin["emptot2"] = njmin["empft2"] + 0.5 * njmin["emppt2"] + njmin["nmgrs2"]
+njmin["closed"] = njmin["status2"] == 3
+njmin["temp_closed"] = njmin["status2"].isin([2, 4, 5])
+njmin["emptot2_closed0"] = np.where(njmin["closed"], 0, njmin["emptot2"])
+njmin["pmeal"] = njmin["psoda"] + njmin["pfry"] + njmin["pentree"]
+njmin["pmeal2"] = njmin["psoda2"] + njmin["pfry2"] + njmin["pentree2"]
+njmin["nj"] = njmin["state"]
+njmin["dwage"] = njmin["wage_st2"] - njmin["wage_st"]
+njmin["demp_all"] = njmin["emptot2_closed0"] - njmin["emptot"]
+
+njmin["gap"] = np.where(
+    njmin["state"] == 0,
+    0,
+    np.where(
+        njmin["wage_st"] >= 5.05,
+        0,
+        np.where(njmin["wage_st"].notna(), (5.05 - njmin["wage_st"]) / njmin["wage_st"], np.nan)
+    )
+)
+
+njmin["chain_name"] = np.select(
+    [njmin["chain"] == 1, njmin["chain"] == 2, njmin["chain"] == 3, njmin["chain"] == 4],
+    ["Burger King", "KFC", "Roy Rogers", "Wendy's"],
+    default=None
+)
+
+njmin["wage_group"] = np.select(
+    [
+        njmin["wage_st"] == 4.25,
+        (njmin["wage_st"] > 4.25) & (njmin["wage_st"] < 5.00),
+        njmin["wage_st"] >= 5.00,
+    ],
+    ["Wage = $4.25", "Wage = $4.26-$4.99", "Wage >= $5.00"],
+    default=None
+)
+
+njmin.head()
+```
+
+## Replicating part of Table 2
+
+I start with three basic comparisons from Table 2: average full-time-equivalent employment, the starting wage, and the price of a full meal before the policy change.
+
+```{python}
+table2_rep = pd.DataFrame({
+    "variable": [
+        "FTE employment (wave 1)",
+        "Starting wage (wave 1)",
+        "Price of full meal (wave 1)"
+    ],
+    "NJ": [
+        njmin.loc[njmin["state"] == 1, "emptot"].mean(),
+        njmin.loc[njmin["state"] == 1, "wage_st"].mean(),
+        njmin.loc[njmin["state"] == 1, "pmeal"].mean()
+    ],
+    "PA": [
+        njmin.loc[njmin["state"] == 0, "emptot"].mean(),
+        njmin.loc[njmin["state"] == 0, "wage_st"].mean(),
+        njmin.loc[njmin["state"] == 0, "pmeal"].mean()
+    ]
+})
+
+table2_rep_rounded = table2_rep.copy()
+table2_rep_rounded[["NJ", "PA"]] = table2_rep_rounded[["NJ", "PA"]].round(2)
+table2_rep_rounded
+```
+
+These numbers match the published table closely:
+
+- FTE employment before the policy: **NJ = 20.44, PA = 23.33**
+- Starting wage before the policy: **NJ = 4.61, PA = 4.63**
+- Price of a full meal before the policy: **NJ = 3.35, PA = 3.04**
+
+## Replicating Table 3: columns (i)-(iii), rows 1-3
+
+The assignment asks for the 9 numbers in Table 3, columns (i)-(iii) and rows 1-3. These are:
+
+1. FTE employment before the policy, all available observations
+2. FTE employment after the policy, all available observations
+3. Change in mean FTE employment
+
+A subtlety matters here. The paper notes that employment at the **six permanently closed stores is set to zero**, while employment at the **four temporarily closed stores is treated as missing**. For row 3, the authors compute the change in means as **row 2 minus row 1**, rather than taking store-level differences on the balanced sample.
+
+```{python}
+row1_pa = njmin.loc[njmin["state"] == 0, "emptot"].mean()
+row1_nj = njmin.loc[njmin["state"] == 1, "emptot"].mean()
+
+row2_pa = njmin.loc[njmin["state"] == 0, "emptot2_closed0"].mean()
+row2_nj = njmin.loc[njmin["state"] == 1, "emptot2_closed0"].mean()
+
+row3_pa = row2_pa - row1_pa
+row3_nj = row2_nj - row1_nj
+row3_did = row3_nj - row3_pa
+
+table3_rep = pd.DataFrame({
+    "row": [
+        "1. FTE employment before, all available observations",
+        "2. FTE employment after, all available observations",
+        "3. Change in mean FTE employment"
+    ],
+    "PA": [row1_pa, row2_pa, row3_pa],
+    "NJ": [row1_nj, row2_nj, row3_nj],
+    "Difference, NJ-PA": [row1_nj - row1_pa, row2_nj - row2_pa, row3_did]
+})
+
+table3_rep.round(2)
+```
+
+The replicated values are:
+
+| Row | PA | NJ | Difference, NJ-PA |
+|---|---:|---:|---:|
+| 1. FTE employment before | 23.33 | 20.44 | -2.89 |
+| 2. FTE employment after | 21.17 | 21.03 | -0.14 |
+| 3. Change in mean FTE employment | -2.16 | 0.59 | 2.76 |
+
+These line up with Table 3 extremely closely. The core difference-in-differences estimate is about **2.76 FTE workers per store**, which is the famous headline result from the paper.
+
+## Replicating Table 4, column (i)
+
+Table 4 turns the same idea into a regression. The dependent variable is the **change in FTE employment**. The sample is restricted to the **357 stores with available employment and starting wage data in both waves**, except that permanently closed stores remain in the sample with wave-2 employment set to zero.
+
+The SAS code distributed with the data uses the following sample rule:
+
+- keep observations with nonmissing change in employment, and
+- keep stores that are permanently closed **or** have nonmissing wage change data.
+
+```{python}
+reg_sample = njmin.loc[njmin["demp_all"].notna() & (njmin["closed"] | njmin["dwage"].notna())].copy()
+
+X = sm.add_constant(reg_sample["nj"])
+model1 = sm.OLS(reg_sample["demp_all"], X).fit()
+
+coef_nj = model1.params["nj"]
+se_nj = model1.bse["nj"]
+
+pd.DataFrame({
+    "term": ["New Jersey dummy"],
+    "estimate": [coef_nj],
+    "std_error": [se_nj],
+    "n": [len(reg_sample)]
+}).round(3)
+```
+
+This reproduces Table 4, column (i) very closely:
+
+- **New Jersey dummy = 2.326**
+- **Standard error = 1.192**
+- **N = 357**
+
+The published table reports **2.33** with standard error **1.19**, so the replication matches essentially exactly.
+
+## Something additional
+
+For the extra step, I replicate **Table 3, row 4**, which uses the **balanced sample** only: stores with available employment data in both waves. This is a useful comparison because it shows the main finding is not driven only by the changing composition of stores with observed employment.
+
+```{python}
+balanced = njmin.loc[njmin["emptot"].notna() & njmin["emptot2"].notna()].copy()
+balanced["demp_balanced"] = balanced["emptot2_closed0"] - balanced["emptot"]
+
+row4_pa = balanced.loc[balanced["state"] == 0, "demp_balanced"].mean()
+row4_nj = balanced.loc[balanced["state"] == 1, "demp_balanced"].mean()
+row4_did = row4_nj - row4_pa
+
+pd.DataFrame({
+    "row": ["4. Change in mean FTE employment, balanced sample of stores"],
+    "PA": [row4_pa],
+    "NJ": [row4_nj],
+    "Difference, NJ-PA": [row4_did]
+}).round(2)
+```
+
+This gives approximately:
+
+- **PA = -2.28**
+- **NJ = 0.47**
+- **Difference-in-differences = 2.75**
+
+That is another close match to the published table. It shows the main result is robust to restricting attention to the balanced sample.
+
+### A graph of the main difference-in-differences result
+
+The paper mainly presents these values in a table, but the basic identification strategy is easier to see in a graph.
+
+```{python}
+plot_data = pd.DataFrame({
+    "state": ["Pennsylvania", "Pennsylvania", "New Jersey", "New Jersey"],
+    "period": ["Before", "After", "Before", "After"],
+    "mean_fte": [row1_pa, row2_pa, row1_nj, row2_nj]
+})
+
+for state, g in plot_data.groupby("state"):
+    plt.plot(g["period"], g["mean_fte"], marker="o", label=state)
+
+plt.title("Mean FTE Employment Before and After the NJ Minimum Wage Increase")
+plt.xlabel("")
+plt.ylabel("Mean FTE employment")
+plt.legend(title="")
+plt.tight_layout()
+plt.show()
+```
+
+The graph makes the difference-in-differences logic clear. Pennsylvania stores lost employment between the two surveys, while New Jersey stores were roughly flat to slightly higher. The resulting gap is positive, not negative, which is inconsistent with the simple prediction that a higher minimum wage must reduce employment.
+
+## Why difference-in-differences helps here
+
+Difference-in-differences helps the authors draw a causal conclusion because it removes time-invariant differences between New Jersey and Pennsylvania stores and nets out any **common regional shock** that affected both states between the two interviews. Under the parallel-trends assumption, the remaining difference in employment changes can be interpreted as the effect of the New Jersey minimum wage increase.
+
+In this setting, Pennsylvania is useful as a comparison group because it is geographically close and economically similar, but it did **not** change its minimum wage during the same period. That makes it a plausible counterfactual for what would have happened to New Jersey fast-food employment in the absence of the policy.
+
+## Conclusion
+
+This replication successfully reproduces the main result of Card and Krueger (1994).
+
+- The descriptive statistics from Table 2 match closely.
+- The key difference-in-differences result from Table 3 is about **2.76 FTE workers**.
+- The regression estimate in Table 4, column (i), is **2.33** with a standard error of **1.19**.
+
+Overall, the replication confirms the paper's central finding: in this case, the New Jersey minimum wage increase did **not** reduce employment in fast-food restaurants relative to Pennsylvania. If anything, employment rose slightly in New Jersey relative to the comparison group.
