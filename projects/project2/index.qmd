@@ -158,7 +158,7 @@ plt.show()
 
 A 95% confidence interval based on the bootstrap standard error runs from about `ci_lower` to `ci_upper`. If that interval stays above zero, it suggests CTA A likely performs better than CTA B.
 
-## The Central Limit Theorem
+## The Central Limit Theorem (CLT)
 
 The Central Limit Theorem says that as the sample size grows, the sampling distribution of the sample mean becomes approximately Normal. The same idea applies to the difference in sample means.
 
