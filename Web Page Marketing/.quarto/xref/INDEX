@@ -1,0 +1,32 @@
+{
+  "index.qmd": {
+    "index.html": "1a7d3723"
+  },
+  "about.qmd": {
+    "about.html": "37a5a0cf"
+  },
+  "Untitled-1.qmd": {
+    "Untitled-1.html": "f2ecfd99"
+  },
+  "resume.qmd": {
+    "resume.html": "852daa1c"
+  },
+  "projects.qmd": {
+    "projects.html": "f72e04db"
+  },
+  "projects/project1/index.qmd": {
+    "index.html": "13f55051"
+  },
+  "projects/project2/index.qmd": {
+    "index.html": "668a79e2"
+  },
+  "files/hw1_questions (1).qmd": {
+    "hw1_questions (1).html": "d20f8c0d"
+  },
+  "projects/project3/index.qmd": {
+    "index.html": "fd5b6c74"
+  },
+  "projects/project4/index.qmd": {
+    "index.html": "ac61d178"
+  }
+}
