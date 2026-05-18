@@ -2,7 +2,7 @@
 ---
 title: "Poisson Regression and Maximum Likelihood Estimation"
 subtitle: "A Case Study of Blueprinty's Software and Patent Awards"
-author: "Your Name"
+author: Paola Montejo Valenzuela
 date: today
 format:
   html:
@@ -41,6 +41,8 @@ Because of these differences, a raw comparison of patent counts may reflect both
 ## Exploring the Data
 
 ```{python}
+#| echo: false
+
 df = pd.read_csv("blueprinty.csv")
 
 df["customer_label"] = np.where(df["iscustomer"] == 1,
@@ -54,6 +56,8 @@ customer_means
 The average patent count is noticeably higher among Blueprinty customers than among non-customers.
 
 ```{python}
+#| echo: false
+
 fig, axes = plt.subplots(1, 2, figsize=(12,5), sharex=True, sharey=True)
 
 for ax, label in zip(axes, ["Customer", "Non-Customer"]):
@@ -75,6 +79,8 @@ However, this does not necessarily imply causation. Customer firms may differ sy
 ### Regional Differences
 
 ```{python}
+#| echo: false
+
 region_table = pd.crosstab(df["region"],
                            df["customer_label"],
                            normalize="columns")
@@ -83,6 +89,8 @@ region_table
 ```
 
 ```{python}
+#| echo: false
+
 region_table.plot(kind="bar",
                   figsize=(8,5))
 plt.ylabel("Proportion")
@@ -96,6 +104,8 @@ The regional composition differs meaningfully between customers and non-customer
 ### Firm Age
 
 ```{python}
+#| echo: false
+
 fig, axes = plt.subplots(1, 2, figsize=(12,5), sharex=True, sharey=True)
 
 for ax, label in zip(axes, ["Customer", "Non-Customer"]):
@@ -156,6 +166,8 @@ $$
 ### Coding the Log-Likelihood
 
 ```{python}
+#| echo: false
+
 def poisson_loglikelihood(lmbda, Y):
     if lmbda <= 0:
         return -np.inf
@@ -172,6 +184,8 @@ def poisson_loglikelihood(lmbda, Y):
 ### Visualizing the Likelihood
 
 ```{python}
+#| echo: false
+
 Y = df["patents"].values
 
 lambda_grid = np.linspace(0.1, 8, 200)
@@ -218,6 +232,8 @@ This result makes intuitive sense because the mean of a Poisson distribution is 
 ### Numerical Optimization
 
 ```{python}
+#| echo: false
+
 def negative_poisson_ll(params, Y):
     return -poisson_loglikelihood(params[0], Y)
 
@@ -257,6 +273,8 @@ The exponential link guarantees that \( \lambda_i \) remains strictly positive.
 ### Constructing the Design Matrix
 
 ```{python}
+#| echo: false
+
 df["age_sq"] = df["age"]**2
 
 X = pd.get_dummies(
@@ -275,6 +293,8 @@ Age squared is included because the relationship between age and patenting may n
 ### Poisson Regression Log-Likelihood
 
 ```{python}
+#| echo: false
+
 def poisson_regression_loglikelihood(beta, Y, X):
 
     xb = X @ beta
@@ -292,6 +312,8 @@ def poisson_regression_loglikelihood(beta, Y, X):
 ### Estimating the Model via MLE
 
 ```{python}
+#| echo: false
+
 def negative_regression_ll(beta, Y, X):
     return -poisson_regression_loglikelihood(beta, Y, X)
 
@@ -320,6 +342,8 @@ results_table
 ### Checking Against `statsmodels`
 
 ```{python}
+#| echo: false
+
 glm_model = sm.GLM(
     Y,
     X_mat,
@@ -350,6 +374,8 @@ To obtain a more intuitive estimate of Blueprinty’s effect, we construct two c
 ### Counterfactual Predictions
 
 ```{python}
+#| echo: false
+
 X0 = X.copy()
 X1 = X.copy()
 
